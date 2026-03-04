@@ -1,39 +1,69 @@
 const express = require("express");
-const bodyParser = require("body-parser");
 const cors = require("cors");
-
-const app = express();
-app.use(bodyParser.json());
-app.use(cors());
-
-let currentOTP = null;
-
 const path = require("path");
 
-// Serve static files
+const app = express();
+
+app.use(express.json());
+app.use(cors());
+
+// ===== Temporary OTP Storage =====
+let currentOTP = null;
+let otpExpiry = null;
+
+// ===== Serve Static Website =====
 app.use(express.static(path.join(__dirname, "public")));
 
-// Base route
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Generate OTP
+// ===== Generate OTP (Called from Web Page) =====
 app.get("/generate-otp", (req, res) => {
-  currentOTP = Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit OTP
+
+  currentOTP = Math.floor(1000 + Math.random() * 9000).toString();
+  otpExpiry = Date.now() + (2 * 60 * 1000); // 2 minutes expiry
+
   console.log("OTP Generated:", currentOTP);
-  res.json({ otp: currentOTP });
+
+  res.json({
+    otp: currentOTP,
+    expiresIn: "2 minutes"
+  });
 });
 
-// Verify OTP
+// ===== Verify OTP (Called from ESP32) =====
 app.post("/verify-otp", (req, res) => {
+
   const { otp } = req.body;
-  if (otp === currentOTP) {
-    res.json({ status: "success", message: "OTP Correct" });
-    currentOTP = null; // reset OTP
-  } else {
-    res.json({ status: "fail", message: "OTP Incorrect" });
+
+  if (!currentOTP) {
+    return res.json({
+      status: "fail",
+      message: "No OTP generated"
+    });
   }
+
+  if (Date.now() > otpExpiry) {
+    currentOTP = null;
+    return res.json({
+      status: "fail",
+      message: "OTP expired"
+    });
+  }
+
+  if (otp === currentOTP) {
+    currentOTP = null; // delete after use
+    return res.json({
+      status: "success",
+      message: "OTP correct"
+    });
+  }
+
+  return res.json({
+    status: "fail",
+    message: "Incorrect OTP"
+  });
 });
 
 module.exports = app;
