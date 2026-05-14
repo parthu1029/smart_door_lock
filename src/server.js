@@ -7,7 +7,6 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-
 // ===== Temporary OTP Storage =====
 let currentOTP = null;
 let otpExpiry = null;
